@@ -1,6 +1,19 @@
 # JPYC X402 Facilitator (Polygon)
 
-JPYCのEIP-3009を処理する[x402プロトコル](https://docs.cdp.coinbase.com/api-reference/v2/rest-api/x402-facilitator)準拠のfacilitatorサービスです（Polygon Mainnet向け）。
+JPYCのEIP-3009を処理する[x402プロトコル](https://docs.cdp.coinbase.com/api-reference/v2/rest-api/x402-facilitator)準拠のfacilitatorサービスです
+
+## 概要
+
+このプロジェクトは、EIP-3009（Transfer With Authorization）を実装したJPYCトークンの決済を、x402プロトコルに準拠した形で処理するファシリテーターサービスです。
+
+## 技術スタック
+
+- **言語**: TypeScript 5.9
+- **ランタイム**: Node.js 24.11.1
+- **Webフレームワーク**: Express 5.1
+- **ブロックチェーンライブラリ**: Viem 2.39
+- **パッケージマネージャー**: pnpm 10.18.3
+- **ブロックチェーン**: Polygon Mainnet (Chain ID: 137)
 
 ## 機能
 
@@ -11,29 +24,101 @@ JPYCのEIP-3009を処理する[x402プロトコル](https://docs.cdp.coinbase.co
   - nonceの重複チェック
   - 残高チェック
   - 金額の妥当性チェック
+  - 送金先アドレスの検証
 - **トランザクション実行**: 検証済みのauthorizationをブロックチェーン上で実行
+
+## アーキテクチャ
+
+```
+┌─────────────┐
+│   Client    │ ─── EIP-712署名の作成
+└──────┬──────┘
+       │
+       │ POST /verify または /settle
+       │
+┌──────▼──────────────────────────────────┐
+│    Facilitator Server (Express)         │
+│  ┌────────────────────────────────────┐ │
+│  │  verifyService.ts                  │ │
+│  │  - x402リクエスト検証              │ │
+│  │  - Authorization検証               │ │
+│  │  - EIP-712署名検証                 │ │
+│  │  - 残高チェック                    │ │
+│  │  - Nonce状態確認                   │ │
+│  └────────────────────────────────────┘ │
+│                                          │
+│  ┌────────────────────────────────────┐ │
+│  │  settleService.ts                  │ │
+│  │  - verifyServiceを呼び出し         │ │
+│  │  - transferWithAuthorization実行   │ │
+│  └────────────────────────────────────┘ │
+└──────────┬───────────────────────────────┘
+           │
+           │ Viem (Web3クライアント)
+           │
+┌──────────▼───────────────────────────────┐
+│     Polygon Blockchain (RPC)             │
+│  ┌────────────────────────────────────┐  │
+│  │  JPYC Contract (EIP-3009)          │  │
+│  │  - transferWithAuthorization()     │  │
+│  │  - authorizationState()            │  │
+│  │  - balanceOf()                     │  │
+│  └────────────────────────────────────┘  │
+└──────────────────────────────────────────┘
+```
+
+### 処理フロー
+
+1. **Verify**: クライアントから受け取った署名付きauthorizationを検証
+   - x402プロトコルの形式検証
+   - Authorization内容の妥当性チェック
+   - EIP-712署名の検証
+   - 残高・nonce状態の確認
+
+2. **Settle**: 検証済みのauthorizationをブロックチェーン上で実行
+   - Verifyと同じ検証を実施
+   - `transferWithAuthorization`関数を呼び出し
+   - トランザクションハッシュを返却
 
 ## セットアップ
 
-### 1. 依存関係のインストール
+### 前提条件
+
+- Polygon Mainnetへのアクセス権（Infura、Alchemyなど）
+- リレイヤー用の秘密鍵（ガス代を支払うアカウント）
+
+### 1. リポジトリのクローン
+
+```bash
+git clone https://github.com/your-username/jpyc-x402-facilitator.git
+cd jpyc-x402-facilitator
+```
+
+### 2. 依存関係のインストール
 
 ```bash
 pnpm install
 ```
 
-### 2. 環境変数の設定
+### 3. 環境変数の設定
 
-`.env`ファイルを作成し、以下の変数を設定してください：
+`.env`ファイルをプロジェクトルートに作成し、以下の変数を設定してください：
 
 ```env
+# Polygon MainnetのRPC URL（InfuraやAlchemyなど）
 RPC_URL=https://polygon-mainnet.infura.io/v3/YOUR_PROJECT_ID
-RELAYER_PK=0x...
-JPYC_CONTRACT_ADDRESS=0x...
+
+# リレイヤーの秘密鍵（ガス代を支払うアカウント）
+RELAYER_PK=0xYOUR_PRIVATE_KEY
+
+# JPYCコントラクトアドレス（Polygon Mainnet）
+JPYC_CONTRACT_ADDRESS=0xE7C3D8C9a439feDe00D2600032D5dB0Be71C3c29
+
+# Chain ID（Polygon Mainnet = 137）
 CHAIN_ID=137
-PORT=4021  # オプション（デフォルト: 4021）
 ```
 
-### 3. サーバーの起動
+### 4. サーバーの起動
 
 ```bash
 pnpm dev
@@ -237,8 +322,114 @@ x402プロトコルに準拠したpaymentの検証を行います。
 - 金額の妥当性チェック（paymentRequirementsとの照合）
 - 送金先アドレスの検証（payToとの照合）
 
+## デプロイ
+
+### Vercelへのデプロイ
+
+このプロジェクトはVercelへのデプロイに対応しています。
+
+1. Vercelアカウントを作成
+2. GitHubリポジトリを連携
+3. 環境変数を設定（Settings > Environment Variables）:
+   - `RPC_URL`
+   - `RELAYER_PK`
+   - `JPYC_CONTRACT_ADDRESS`
+   - `CHAIN_ID`
+4. デプロイ
+
+## 技術的な詳細
+
+### EIP-3009: Transfer With Authorization
+
+EIP-3009は、トークンの転送をガスレスで実行するための標準です。ユーザーは署名を作成し、第三者（ファシリテーター）がその署名を使ってトランザクションを実行します。
+
+**メリット:**
+- ユーザーはガス代を支払わなくて済む
+- ユーザーはETH/MATICを保有する必要がない
+- 1つの署名で複数のトークン転送が可能
+
+### EIP-712: Typed Structured Data Hashing and Signing
+
+EIP-712は、構造化されたデータに署名するための標準です。人間が読める形式で署名内容を表示できます。
+
+**このプロジェクトでの使用:**
+```typescript
+{
+  domain: {
+    name: "JPY Coin",
+    version: "1",
+    chainId: 137,
+    verifyingContract: "0x6AE7Dfc73E0dDE2aa99ac063DcF7e8A63265108c"
+  },
+  types: {
+    TransferWithAuthorization: [
+      { name: "from", type: "address" },
+      { name: "to", type: "address" },
+      { name: "value", type: "uint256" },
+      { name: "validAfter", type: "uint256" },
+      { name: "validBefore", type: "uint256" },
+      { name: "nonce", type: "bytes32" }
+    ]
+  }
+}
+```
+
+## 開発
+
+### プロジェクト構成
+
+```
+src/
+├── server.ts          # Expressサーバーのメインファイル
+├── verifyService.ts   # 署名検証ロジック
+├── settleService.ts   # トランザクション実行ロジック
+├── common.ts          # Viemクライアントの設定
+├── jpycAbi.ts         # JPYCコントラクトのABI
+├── types.ts           # TypeScript型定義
+└── env.ts             # 環境変数のバリデーション
+```
+
+### テスト
+
+```bash
+# 開発サーバーを起動
+pnpm dev
+
+# 別のターミナルでcurlでテスト
+curl -X POST http://localhost:4021/verify \
+  -H "Content-Type: application/json" \
+  -d @test-payload.json
+```
+
+## トラブルシューティング
+
+### よくある問題
+
+**1. `Missing required environment variables` エラー**
+- `.env`ファイルが正しく設定されているか確認
+- すべての必須環境変数が設定されているか確認
+
+**2. `insufficient_funds` エラー**
+- リレイヤーアカウントにMATICが十分にあるか確認
+- ユーザーのJPYC残高が十分にあるか確認
+
+**3. 署名検証エラー**
+- EIP-712の署名が正しく生成されているか確認
+- `chainId`と`verifyingContract`が正しいか確認
+- nonceが既に使用されていないか確認
+
+
 ## 注意事項
 
-- 秘密鍵は厳重に管理してください
-- 本番環境では、nonceの管理にRedisなどの永続化ストレージを使用することを推奨します
-- RPC URLは信頼できるプロバイダーを使用してください
+- **秘密鍵の管理**: `RELAYER_PK`は厳重に管理してください。GitHubにコミットしないよう`.gitignore`を確認してください
+- **本番環境**: 本番環境では、nonceの管理にRedisなどの永続化ストレージを使用することを推奨します
+- **RPC URL**: 信頼できるプロバイダー（Infura、Alchemyなど）を使用してください
+- **ガス代**: リレイヤーアカウントには常に十分なMATICを保持してください
+
+## 参考リンク
+
+- [x402 Protocol Documentation](https://docs.cdp.coinbase.com/api-reference/v2/rest-api/x402-facilitator)
+- [EIP-3009: Transfer With Authorization](https://eips.ethereum.org/EIPS/eip-3009)
+- [EIP-712: Typed Structured Data Hashing and Signing](https://eips.ethereum.org/EIPS/eip-712)
+- [JPYC Official Website](https://jpyc.jp/)
+- [Viem Documentation](https://viem.sh/)
