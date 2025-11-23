@@ -1,7 +1,6 @@
 import { parseSignature } from "viem";
-import { Uint256, Uint8 } from "soltypes";
 import { SettleRequest, SettleResponse } from "./types";
-import { jpyc } from "./common";
+import { jpycContract } from "./common";
 import { verifyAuthorization } from "./verifyService";
 
 export async function settleAuthorization(req: SettleRequest): Promise<SettleResponse> {
@@ -25,20 +24,19 @@ export async function settleAuthorization(req: SettleRequest): Promise<SettleRes
 
   try {
     const signature = parseSignature(paymentPayload.payload.signature as `0x${string}`);
-    const v = signature.yParity + 27;
-    const valueInJPYC = Number(authorization.value) / 1e18;
+    const v = signature.yParity === 0 ? 27 : 28;
 
-    const hash = await jpyc.transferWithAuthorization({
-      from: authorization.from as `0x${string}`,
-      to: authorization.to as `0x${string}`,
-      value: valueInJPYC,
-      validAfter: Uint256.from(authorization.validAfter.toString()),
-      validBefore: Uint256.from(authorization.validBefore.toString()),
-      nonce: authorization.nonce as `0x${string}`,
-      v: Uint8.from(v.toString()),
-      r: signature.r as `0x${string}`,
-      s: signature.s as `0x${string}`,
-    });
+    const hash = await jpycContract.write.transferWithAuthorization([
+      authorization.from as `0x${string}`,
+      authorization.to as `0x${string}`,
+      BigInt(authorization.value),
+      BigInt(authorization.validAfter),
+      BigInt(authorization.validBefore),
+      authorization.nonce as `0x${string}`,
+      v,
+      signature.r as `0x${string}`,
+      signature.s as `0x${string}`,
+    ]);
 
     console.log(`[Settle] Transaction sent: ${hash}`);
 

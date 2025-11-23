@@ -1,6 +1,6 @@
 import { isAddress, recoverTypedDataAddress, parseSignature } from "viem";
 import { VerifyRequest, VerifyResponse, InvalidReason, Authorization } from "./types";
-import { jpyc } from "./common";
+import { jpycContract } from "./common";
 
 // x402リクエストのバリデーション
 function validateX402Request(req: VerifyRequest): { valid: boolean; reason?: InvalidReason } {
@@ -94,8 +94,7 @@ export async function verifyAuthorization(req: VerifyRequest): Promise<VerifyRes
   }
 
   try {
-    // @ts-ignore
-    const authState = await jpyc.contract.read.authorizationState([
+    const authState = await jpycContract.read.authorizationState([
       authorization.from as `0x${string}`,
       authorization.nonce as `0x${string}`,
     ]);
@@ -111,11 +110,9 @@ export async function verifyAuthorization(req: VerifyRequest): Promise<VerifyRes
   }
 
   try {
-    const balance = await jpyc.balanceOf({
-      account: authorization.from as `0x${string}`,
-    });
-    const valueInJPYC = Number(authorization.value) / 1e18;
-    if (balance < valueInJPYC) {
+    const balance = await jpycContract.read.balanceOf([authorization.from as `0x${string}`]);
+    const value = BigInt(authorization.value);
+    if (balance < value) {
       return {
         isValid: false,
         invalidReason: "insufficient_funds",

@@ -5,14 +5,6 @@ import { settleAuthorization } from "./settleService";
 import { VerifyRequest, VerifyResponse, SettleRequest, SettleResponse } from "./types";
 import { validateEnv } from "./env";
 
-// 環境変数のバリデーション
-try {
-  validateEnv();
-} catch (error: any) {
-  console.error("Environment validation failed:", error.message);
-  process.exit(1);
-}
-
 const app = express();
 app.use(cors());
 app.use(express.json());
@@ -90,10 +82,16 @@ app.post("/settle", async (req, res) => {
 // Vercelデプロイ時はappをエクスポート、ローカル開発時はサーバーを起動
 if (process.env.VERCEL || process.env.VERCEL_ENV) {
   // Vercel環境ではappをエクスポート
-  // @ts-ignore - Vercel用のCommonJSエクスポート
   module.exports = app;
 } else {
-  // ローカル開発環境ではサーバーを起動
+  // ローカル開発環境では環境変数をバリデーションしてサーバーを起動
+  try {
+    validateEnv();
+  } catch (error: any) {
+    console.error("Environment validation failed:", error.message);
+    process.exit(1);
+  }
+
   const PORT = 4021;
   app.listen(PORT, () => {
     console.log(`[${new Date().toISOString()}] Facilitator running on http://localhost:${PORT}`);
