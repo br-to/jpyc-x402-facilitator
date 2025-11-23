@@ -4,7 +4,7 @@ dotenv.config();
 const requiredEnvVars = [
   "RPC_URL",
   "RELAYER_PK",
-  "JPYC_SEPOLIA",
+  "JPYC_CONTRACT_ADDRESS",
   "CHAIN_ID",
 ] as const;
 
@@ -32,9 +32,9 @@ export function validateEnv() {
     throw new Error("RELAYER_PK must be a valid hex string starting with 0x");
   }
 
-  // JPYC_SEPOLIAが0xで始まるかチェック
-  if (!process.env.JPYC_SEPOLIA?.startsWith("0x")) {
-    throw new Error("JPYC_SEPOLIA must be a valid address starting with 0x");
+  // JPYC_CONTRACT_ADDRESSが0xで始まるかチェック
+  if (!process.env.JPYC_CONTRACT_ADDRESS?.startsWith("0x")) {
+    throw new Error("JPYC_CONTRACT_ADDRESS must be a valid address starting with 0x");
   }
 
   console.log("✓ Environment variables validated");

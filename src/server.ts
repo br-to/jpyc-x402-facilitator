@@ -27,7 +27,7 @@ app.get("/health", (req, res) => {
   res.json({
     status: "ok",
     timestamp: new Date().toISOString(),
-    service: "jpyc-x402-facilitator-sepolia"
+    service: "jpyc-x402-facilitator-polygon"
   });
 });
 
@@ -88,7 +88,7 @@ if (process.env.VERCEL || process.env.VERCEL_ENV) {
   module.exports = app;
 } else {
   // ローカル開発環境ではサーバーを起動
-  const PORT = process.env.PORT || 3000;
+  const PORT = process.env.PORT || 4021;
   app.listen(PORT, () => {
     console.log(`[${new Date().toISOString()}] Facilitator running on http://localhost:${PORT}`);
   });

@@ -1,6 +1,6 @@
 import { createWalletClient, createPublicClient, http, getContract, recoverTypedDataAddress, isAddress, formatUnits } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { sepolia } from "viem/chains";
+import { polygon } from "viem/chains";
 import dotenv from "dotenv";
 import { Authorization } from "./types";
 dotenv.config();
@@ -9,17 +9,17 @@ const account = privateKeyToAccount(process.env.RELAYER_PK as `0x${string}`);
 
 const walletClient = createWalletClient({
   account,
-  chain: sepolia,
+  chain: polygon,
   transport: http(process.env.RPC_URL),
 });
 
 const publicClient = createPublicClient({
-  chain: sepolia,
+  chain: polygon,
   transport: http(process.env.RPC_URL),
 });
 
 const jpycContract = getContract({
-  address: process.env.JPYC_SEPOLIA as `0x${string}`,
+  address: process.env.JPYC_CONTRACT_ADDRESS as `0x${string}`,
   abi: [
     {
       name: "transferWithAuthorization",
@@ -161,7 +161,7 @@ export async function verifyAuthorization(auth: Authorization): Promise<{ ok: bo
     name: "JPY Coin",
     version: "1",
     chainId: Number(process.env.CHAIN_ID),
-    verifyingContract: process.env.JPYC_SEPOLIA as `0x${string}`,
+    verifyingContract: process.env.JPYC_CONTRACT_ADDRESS as `0x${string}`,
   };
 
   const types = {

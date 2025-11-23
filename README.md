@@ -1,6 +1,6 @@
-# JPYC X402 Facilitator (Sepolia)
+# JPYC X402 Facilitator (Polygon)
 
-JPYCのEIP-3009を処理するfacilitatorサービスです。
+JPYCのEIP-3009を処理するfacilitatorサービスです（Polygon Mainnet向け）。
 
 ## 機能
 
@@ -24,11 +24,11 @@ pnpm install
 `.env`ファイルを作成し、以下の変数を設定してください：
 
 ```env
-RPC_URL=https://sepolia.infura.io/v3/YOUR_PROJECT_ID
+RPC_URL=https://polygon-mainnet.infura.io/v3/YOUR_PROJECT_ID
 RELAYER_PK=0x...
-JPYC_SEPOLIA=0x...
-CHAIN_ID=11155111
-PORT=3000  # オプション（デフォルト: 3000）
+JPYC_CONTRACT_ADDRESS=0x...
+CHAIN_ID=137
+PORT=4021  # オプション（デフォルト: 4021）
 ```
 
 ### 3. サーバーの起動
@@ -48,7 +48,7 @@ pnpm dev
 {
   "status": "ok",
   "timestamp": "2024-01-01T00:00:00.000Z",
-  "service": "jpyc-x402-facilitator-sepolia"
+  "service": "jpyc-x402-facilitator-polygon"
 }
 ```
 
