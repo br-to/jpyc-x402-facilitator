@@ -1,8 +1,8 @@
-import { createWalletClient, createPublicClient, http, getContract, recoverTypedDataAddress, isAddress, formatUnits } from "viem";
+import { createWalletClient, createPublicClient, http, getContract, recoverTypedDataAddress, isAddress, formatUnits, hexToSignature } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { polygon } from "viem/chains";
 import dotenv from "dotenv";
-import { Authorization } from "./types";
+import { VerifyRequest, SettleRequest, VerifyResponse, SettleResponse, InvalidReason, Authorization, ExactEvmPayload } from "./types";
 dotenv.config();
 
 const account = privateKeyToAccount(process.env.RELAYER_PK as `0x${string}`);
@@ -65,36 +65,53 @@ const jpycContract = getContract({
 // 使用済みnonceを追跡（本番環境ではRedis等を使用推奨）
 const usedNonces = new Set<string>();
 
-// バリデーション関数
-function validateAuthorization(auth: Authorization): { valid: boolean; error?: string } {
-  if (!auth.from || !auth.to || !auth.value || !auth.nonce || auth.v === undefined || !auth.r || !auth.s) {
-    return { valid: false, error: "Missing required fields" };
+// x402リクエストのバリデーション
+function validateX402Request(req: VerifyRequest | SettleRequest): { valid: boolean; reason?: InvalidReason } {
+  // x402Versionチェック
+  if (req.x402Version !== 1 || req.paymentPayload.x402Version !== 1) {
+    return { valid: false, reason: "invalid_x402_version" };
   }
 
+  // schemeチェック
+  if (req.paymentPayload.scheme !== "exact" || req.paymentRequirements.scheme !== "exact") {
+    return { valid: false, reason: "invalid_scheme" };
+  }
+
+  // networkチェック
+  if (req.paymentPayload.network !== req.paymentRequirements.network) {
+    return { valid: false, reason: "invalid_network" };
+  }
+
+  return { valid: true };
+}
+
+// Authorizationのバリデーション
+function validateAuthorization(
+  auth: Authorization,
+  requirements: VerifyRequest["paymentRequirements"]
+): { valid: boolean; reason?: InvalidReason } {
   if (!isAddress(auth.from)) {
-    return { valid: false, error: "Invalid from address" };
+    return { valid: false, reason: "invalid_payload" };
   }
 
   if (!isAddress(auth.to)) {
-    return { valid: false, error: "Invalid to address" };
+    return { valid: false, reason: "invalid_payload" };
   }
 
-  // rとsは32バイトのhex文字列（0x + 64文字）
-  if (!auth.r.startsWith("0x") || auth.r.length !== 66) {
-    return { valid: false, error: "Invalid signature r format" };
-  }
-
-  if (!auth.s.startsWith("0x") || auth.s.length !== 66) {
-    return { valid: false, error: "Invalid signature s format" };
-  }
-
-  if (auth.v !== 27 && auth.v !== 28 && auth.v !== 0 && auth.v !== 1) {
-    return { valid: false, error: "Invalid signature v value" };
+  // toアドレスがpaymentRequirementsのpayToと一致するかチェック
+  if (auth.to.toLowerCase() !== requirements.payTo.toLowerCase()) {
+    return { valid: false, reason: "invalid_payload" };
   }
 
   const value = BigInt(auth.value);
   if (value <= 0n) {
-    return { valid: false, error: "Value must be greater than 0" };
+    return { valid: false, reason: "invalid_exact_evm_payload_authorization_value" };
+  }
+
+  // 金額が要求額と一致するかチェック
+  const maxAmount = BigInt(requirements.maxAmountRequired);
+  if (value < maxAmount) {
+    return { valid: false, reason: "invalid_exact_evm_payload_authorization_value_too_low" };
   }
 
   const validAfter = BigInt(auth.validAfter);
@@ -102,61 +119,93 @@ function validateAuthorization(auth: Authorization): { valid: boolean; error?: s
   const now = BigInt(Math.floor(Date.now() / 1000));
 
   if (validAfter > now) {
-    return { valid: false, error: "Authorization not yet valid" };
+    return { valid: false, reason: "invalid_exact_evm_payload_authorization_valid_after" };
   }
 
   if (validBefore < now) {
-    return { valid: false, error: "Authorization expired" };
+    return { valid: false, reason: "invalid_exact_evm_payload_authorization_valid_before" };
   }
 
   if (validAfter >= validBefore) {
-    return { valid: false, error: "Invalid time window" };
+    return { valid: false, reason: "invalid_exact_evm_payload_authorization_valid_before" };
   }
 
   return { valid: true };
 }
 
-export async function verifyAuthorization(auth: Authorization): Promise<{ ok: boolean; error?: string }> {
-  // バリデーション
-  const validation = validateAuthorization(auth);
-  if (!validation.valid) {
-    return { ok: false, error: validation.error };
+export async function verifyAuthorization(req: VerifyRequest): Promise<VerifyResponse> {
+  const { paymentPayload, paymentRequirements } = req;
+  const { authorization } = paymentPayload.payload;
+  const payer = authorization.from;
+
+  // x402リクエストのバリデーション
+  const x402Validation = validateX402Request(req);
+  if (!x402Validation.valid) {
+    return {
+      isValid: false,
+      invalidReason: x402Validation.reason,
+      payer,
+    };
+  }
+
+  // authorizationのバリデーション
+  const authValidation = validateAuthorization(authorization, paymentRequirements);
+  if (!authValidation.valid) {
+    return {
+      isValid: false,
+      invalidReason: authValidation.reason,
+      payer,
+    };
   }
 
   // nonceの重複チェック
-  const nonceKey = `${auth.from.toLowerCase()}:${auth.nonce}`;
+  const nonceKey = `${authorization.from.toLowerCase()}:${authorization.nonce}`;
   if (usedNonces.has(nonceKey)) {
-    return { ok: false, error: "Nonce already used" };
+    return {
+      isValid: false,
+      invalidReason: "invalid_payload",
+      payer,
+    };
   }
 
   // コントラクトでnonceの状態を確認
   try {
     const authState = await jpycContract.read.authorizationState([
-      auth.from as `0x${string}`,
-      auth.nonce as `0x${string}`,
+      authorization.from as `0x${string}`,
+      authorization.nonce as `0x${string}`,
     ]);
-    // authorizationStateが0以外の場合、既に使用済み
-    // authStateはuint8なので、number型として扱う
     if (Number(authState) !== 0) {
-      return { ok: false, error: "Nonce already used on chain" };
+      return {
+        isValid: false,
+        invalidReason: "invalid_payload",
+        payer,
+      };
     }
   } catch (error) {
     console.error("Failed to check authorization state:", error);
-    // チェックに失敗しても続行（ネットワークエラーの可能性）
   }
 
   // 残高チェック
   try {
-    const balance = await jpycContract.read.balanceOf([auth.from as `0x${string}`]);
-    const value = BigInt(auth.value);
+    const balance = await jpycContract.read.balanceOf([authorization.from as `0x${string}`]);
+    const value = BigInt(authorization.value);
     if (balance < value) {
-      return { ok: false, error: `Insufficient balance: ${formatUnits(balance, 18)} JPYC` };
+      return {
+        isValid: false,
+        invalidReason: "insufficient_funds",
+        payer,
+      };
     }
   } catch (error) {
     console.error("Failed to check balance:", error);
-    return { ok: false, error: "Failed to verify balance" };
+    return {
+      isValid: false,
+      invalidReason: "invalid_payload",
+      payer,
+    };
   }
 
+  // EIP-712署名検証
   const domain = {
     name: "JPY Coin",
     version: "1",
@@ -176,23 +225,19 @@ export async function verifyAuthorization(auth: Authorization): Promise<{ ok: bo
   };
 
   const message = {
-    from: auth.from as `0x${string}`,
-    to: auth.to as `0x${string}`,
-    value: BigInt(auth.value),
-    validAfter: BigInt(auth.validAfter),
-    validBefore: BigInt(auth.validBefore),
-    nonce: auth.nonce as `0x${string}`,
+    from: authorization.from as `0x${string}`,
+    to: authorization.to as `0x${string}`,
+    value: BigInt(authorization.value),
+    validAfter: BigInt(authorization.validAfter),
+    validBefore: BigInt(authorization.validBefore),
+    nonce: authorization.nonce as `0x${string}`,
   };
 
-  // vが27または28の場合、yParity = v - 27
-  const yParity = auth.v === 27 || auth.v === 28 ? auth.v - 27 : auth.v;
-  const signature = {
-    r: auth.r as `0x${string}`,
-    s: auth.s as `0x${string}`,
-    yParity,
-  } as const;
-
   try {
+    // signatureを分解 (0x + 130文字 = r(64) + s(64) + v(2))
+    const sig = paymentPayload.payload.signature;
+    const signature = hexToSignature(sig as `0x${string}`);
+
     const recovered = await recoverTypedDataAddress({
       domain,
       types,
@@ -201,48 +246,83 @@ export async function verifyAuthorization(auth: Authorization): Promise<{ ok: bo
       signature,
     });
 
-    const isValid = recovered.toLowerCase() === auth.from.toLowerCase();
+    const isValid = recovered.toLowerCase() === authorization.from.toLowerCase();
     if (!isValid) {
-      return { ok: false, error: "Invalid signature" };
+      return {
+        isValid: false,
+        invalidReason: "invalid_exact_evm_payload_signature_address",
+        payer,
+      };
     }
 
-    return { ok: true };
+    return {
+      isValid: true,
+      payer,
+    };
   } catch (error) {
     console.error("Signature verification failed:", error);
-    return { ok: false, error: "Signature verification failed" };
+    return {
+      isValid: false,
+      invalidReason: "invalid_exact_evm_payload_signature",
+      payer,
+    };
   }
 }
 
-export async function settleAuthorization(auth: Authorization): Promise<{ hash: string; receipt: any }> {
+export async function settleAuthorization(req: SettleRequest): Promise<SettleResponse> {
+  const { paymentPayload, paymentRequirements } = req;
+  const { authorization } = paymentPayload.payload;
+  const payer = authorization.from;
+
   // 事前に検証
-  const verification = await verifyAuthorization(auth);
-  if (!verification.ok) {
-    throw new Error(verification.error || "Authorization verification failed");
+  const verification = await verifyAuthorization(req);
+  if (!verification.isValid) {
+    return verification;
   }
 
-  console.log(`[Settle] Processing authorization from ${auth.from} to ${auth.to}, value: ${auth.value}`);
+  console.log(`[Settle] Processing authorization from ${authorization.from} to ${authorization.to}, value: ${authorization.value}`);
 
-  const hash = await jpycContract.write.transferWithAuthorization([
-    auth.from as `0x${string}`,
-    auth.to as `0x${string}`,
-    BigInt(auth.value),
-    BigInt(auth.validAfter),
-    BigInt(auth.validBefore),
-    auth.nonce as `0x${string}`,
-    auth.v as 0 | 1 | 27 | 28,
-    auth.r as `0x${string}`,
-    auth.s as `0x${string}`,
-  ]);
+  try {
+    // signatureを分解
+    const sig = paymentPayload.payload.signature;
+    const signature = hexToSignature(sig as `0x${string}`);
 
-  console.log(`[Settle] Transaction sent: ${hash}`);
+    // yParityをvに変換 (yParity 0/1 → v 27/28)
+    const v = signature.yParity + 27;
 
-  const receipt = await publicClient.waitForTransactionReceipt({ hash });
+    const hash = await jpycContract.write.transferWithAuthorization([
+      authorization.from as `0x${string}`,
+      authorization.to as `0x${string}`,
+      BigInt(authorization.value),
+      BigInt(authorization.validAfter),
+      BigInt(authorization.validBefore),
+      authorization.nonce as `0x${string}`,
+      v as 0 | 1 | 27 | 28,
+      signature.r,
+      signature.s,
+    ]);
 
-  // nonceを記録
-  const nonceKey = `${auth.from.toLowerCase()}:${auth.nonce}`;
-  usedNonces.add(nonceKey);
+    console.log(`[Settle] Transaction sent: ${hash}`);
 
-  console.log(`[Settle] Transaction confirmed: ${hash}, status: ${receipt.status}`);
+    const receipt = await publicClient.waitForTransactionReceipt({ hash });
 
-  return { hash, receipt };
+    // nonceを記録
+    const nonceKey = `${authorization.from.toLowerCase()}:${authorization.nonce}`;
+    usedNonces.add(nonceKey);
+
+    console.log(`[Settle] Transaction confirmed: ${hash}, status: ${receipt.status}`);
+
+    return {
+      isValid: true,
+      txHash: hash,
+      payer,
+    };
+  } catch (error: any) {
+    console.error("[Settle] Error:", error);
+    return {
+      isValid: false,
+      invalidReason: "invalid_payload",
+      payer,
+    };
+  }
 }

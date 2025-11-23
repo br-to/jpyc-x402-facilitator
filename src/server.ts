@@ -1,7 +1,7 @@
 import express from "express";
 import cors from "cors";
 import { verifyAuthorization, settleAuthorization } from "./services3009";
-import { Authorization, VerifyResponse, SettleResponse } from "./types";
+import { VerifyRequest, VerifyResponse, SettleRequest, SettleResponse } from "./types";
 import { validateEnv } from "./env";
 
 // 環境変数のバリデーション
@@ -33,50 +33,54 @@ app.get("/health", (req, res) => {
 
 app.post("/verify", async (req, res) => {
   try {
-    const auth = req.body.auth as Authorization;
+    const verifyReq = req.body as VerifyRequest;
 
-    if (!auth) {
-      return res.status(400).json({ ok: false, error: "Missing auth object" } as VerifyResponse);
+    // 必須フィールドのチェック
+    if (!verifyReq.x402Version || !verifyReq.paymentPayload || !verifyReq.paymentRequirements) {
+      return res.status(400).json({
+        isValid: false,
+        invalidReason: "invalid_payload",
+        payer: verifyReq.paymentPayload?.payload?.authorization?.from || "unknown",
+      } as VerifyResponse);
     }
 
-    const result = await verifyAuthorization(auth);
+    const result = await verifyAuthorization(verifyReq);
 
-    if (!result.ok) {
-      return res.status(400).json(result as VerifyResponse);
-    }
-
-    return res.json({ ok: true } as VerifyResponse);
+    // x402標準: 検証が失敗しても200を返す（isValid=falseで示す）
+    return res.json(result);
   } catch (err: any) {
     console.error("[Verify] Error:", err);
     return res.status(500).json({
-      ok: false,
-      error: err.message || "verify failed"
+      isValid: false,
+      invalidReason: "invalid_payload",
+      payer: "unknown",
     } as VerifyResponse);
   }
 });
 
 app.post("/settle", async (req, res) => {
   try {
-    const auth = req.body.auth as Authorization;
+    const settleReq = req.body as SettleRequest;
 
-    if (!auth) {
+    // 必須フィールドのチェック
+    if (!settleReq.x402Version || !settleReq.paymentPayload || !settleReq.paymentRequirements) {
       return res.status(400).json({
-        ok: false,
-        error: "Missing auth object"
+        isValid: false,
+        invalidReason: "invalid_payload",
+        payer: settleReq.paymentPayload?.payload?.authorization?.from || "unknown",
       } as SettleResponse);
     }
 
-    const result = await settleAuthorization(auth);
+    const result = await settleAuthorization(settleReq);
 
-    return res.json({
-      ok: true,
-      txHash: result.hash
-    } as SettleResponse);
+    // x402標準: 決済が失敗しても200を返す（isValid=falseで示す）
+    return res.json(result);
   } catch (err: any) {
     console.error("[Settle] Error:", err);
     return res.status(500).json({
-      ok: false,
-      error: err.message || "settle failed"
+      isValid: false,
+      invalidReason: "invalid_payload",
+      payer: "unknown",
     } as SettleResponse);
   }
 });
