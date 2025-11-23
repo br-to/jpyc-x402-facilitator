@@ -92,7 +92,7 @@ x402プロトコルに準拠したpaymentの検証を行います。
 }
 ```
 
-**レスポンス（成功）:**
+**レスポンス（200 OK - 検証成功）:**
 ```json
 {
   "isValid": true,
@@ -100,7 +100,7 @@ x402プロトコルに準拠したpaymentの検証を行います。
 }
 ```
 
-**レスポンス（失敗）:**
+**レスポンス（200 OK - 検証失敗）:**
 ```json
 {
   "isValid": false,
@@ -109,7 +109,23 @@ x402プロトコルに準拠したpaymentの検証を行います。
 }
 ```
 
-**invalidReasonの種類:**
+**レスポンス（400 Bad Request - リクエスト形式が不正）:**
+```json
+{
+  "errorType": "invalid_request",
+  "errorMessage": "Invalid request. Please check the request body and parameters."
+}
+```
+
+**レスポンス（500 Internal Server Error - サーバーエラー）:**
+```json
+{
+  "errorType": "internal_server_error",
+  "errorMessage": "An internal server error occurred. Please try again later."
+}
+```
+
+**Verifyの invalidReasonの種類:**
 - `insufficient_funds`: 残高不足
 - `invalid_scheme`: スキームが不正
 - `invalid_network`: ネットワークが不正
@@ -121,6 +137,11 @@ x402プロトコルに準拠したpaymentの検証を行います。
 - `invalid_exact_evm_payload_authorization_valid_before`: validBeforeが不正
 - `invalid_exact_evm_payload_signature`: 署名が不正
 - `invalid_exact_evm_payload_signature_address`: 署名アドレスが不一致
+
+**Settleの errorReasonの種類:**
+- 上記の `invalidReason` と同様、加えて：
+- `settle_exact_svm_block_height_exceeded`: ブロック高が超過（Solana）
+- `settle_exact_svm_transaction_confirmation_timed_out`: トランザクション確認タイムアウト（Solana）
 
 ### POST /settle
 
@@ -160,21 +181,40 @@ x402プロトコルに準拠したpaymentの検証を行います。
 }
 ```
 
-**レスポンス（成功）:**
+**レスポンス（200 OK - 決済成功）:**
 ```json
 {
-  "isValid": true,
-  "txHash": "0xabc123...",
-  "payer": "0x742d35Cc6634C0532925a3b844Bc454e4438f44e"
+  "success": true,
+  "payer": "0x742d35Cc6634C0532925a3b844Bc454e4438f44e",
+  "transaction": "0xabc123...",
+  "network": "polygon"
 }
 ```
 
-**レスポンス（失敗）:**
+**レスポンス（200 OK - 決済失敗）:**
 ```json
 {
-  "isValid": false,
-  "invalidReason": "insufficient_funds",
-  "payer": "0x742d35Cc6634C0532925a3b844Bc454e4438f44e"
+  "success": false,
+  "errorReason": "insufficient_funds",
+  "payer": "0x742d35Cc6634C0532925a3b844Bc454e4438f44e",
+  "transaction": "",
+  "network": "polygon"
+}
+```
+
+**レスポンス（400 Bad Request - リクエスト形式が不正）:**
+```json
+{
+  "errorType": "invalid_request",
+  "errorMessage": "Invalid request. Please check the request body and parameters."
+}
+```
+
+**レスポンス（500 Internal Server Error - サーバーエラー）:**
+```json
+{
+  "errorType": "internal_server_error",
+  "errorMessage": "An internal server error occurred. Please try again later."
 }
 ```
 

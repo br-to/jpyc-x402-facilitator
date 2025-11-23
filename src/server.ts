@@ -34,54 +34,62 @@ app.get("/health", (req, res) => {
 app.post("/verify", async (req, res) => {
   try {
     const verifyReq = req.body as VerifyRequest;
+    console.log(`[Verify] Request received:`, JSON.stringify(verifyReq, null, 2));
 
-    // 必須フィールドのチェック
+    // 必須フィールドのチェック（リクエスト形式の検証）
     if (!verifyReq.x402Version || !verifyReq.paymentPayload || !verifyReq.paymentRequirements) {
+      console.log(`[Verify] Invalid request format, returning 400`);
+      // x402標準: リクエスト形式が不正な場合は400を返す
       return res.status(400).json({
-        isValid: false,
-        invalidReason: "invalid_payload",
-        payer: verifyReq.paymentPayload?.payload?.authorization?.from || "unknown",
-      } as VerifyResponse);
+        errorType: "invalid_request",
+        errorMessage: "Invalid request. Please check the request body and parameters.",
+      });
     }
 
     const result = await verifyAuthorization(verifyReq);
+    console.log(`[Verify] Result:`, result);
 
     // x402標準: 検証が失敗しても200を返す（isValid=falseで示す）
-    return res.json(result);
+    return res.status(200).json(result);
   } catch (err: any) {
-    console.error("[Verify] Error:", err);
+    console.error("[Verify] Unexpected error:", err);
+    // x402標準: サーバーエラーは500を返す
     return res.status(500).json({
-      isValid: false,
-      invalidReason: "invalid_payload",
-      payer: "unknown",
-    } as VerifyResponse);
+      errorType: "internal_server_error",
+      errorMessage: "An internal server error occurred. Please try again later.",
+    });
   }
 });
 
 app.post("/settle", async (req, res) => {
   try {
     const settleReq = req.body as SettleRequest;
+    console.log(`[Settle] Request received from:`, req.ip);
+    console.log(`[Settle] Request body:`, JSON.stringify(settleReq, null, 2));
 
-    // 必須フィールドのチェック
+    // 必須フィールドのチェック（リクエスト形式の検証）
     if (!settleReq.x402Version || !settleReq.paymentPayload || !settleReq.paymentRequirements) {
+      console.log(`[Settle] Invalid request format, returning 400`);
+      // x402標準: リクエスト形式が不正な場合は400を返す
       return res.status(400).json({
-        isValid: false,
-        invalidReason: "invalid_payload",
-        payer: settleReq.paymentPayload?.payload?.authorization?.from || "unknown",
-      } as SettleResponse);
+        errorType: "invalid_request",
+        errorMessage: "Invalid request. Please check the request body and parameters.",
+      });
     }
 
     const result = await settleAuthorization(settleReq);
+    console.log(`[Settle] Settlement result:`, result);
+    console.log(`[Settle] Sending 200 OK response to client...`);
 
     // x402標準: 決済が失敗しても200を返す（isValid=falseで示す）
-    return res.json(result);
+    return res.status(200).json(result);
   } catch (err: any) {
-    console.error("[Settle] Error:", err);
+    console.error("[Settle] Unexpected error:", err);
+    // x402標準: サーバーエラーは500を返す
     return res.status(500).json({
-      isValid: false,
-      invalidReason: "invalid_payload",
-      payer: "unknown",
-    } as SettleResponse);
+      errorType: "internal_server_error",
+      errorMessage: "An internal server error occurred. Please try again later.",
+    });
   }
 });
 

@@ -273,11 +273,19 @@ export async function settleAuthorization(req: SettleRequest): Promise<SettleRes
   const { paymentPayload, paymentRequirements } = req;
   const { authorization } = paymentPayload.payload;
   const payer = authorization.from;
+  const network = paymentPayload.network;
 
   // 事前に検証
   const verification = await verifyAuthorization(req);
   if (!verification.isValid) {
-    return verification;
+    // verifyの結果をsettleレスポンス形式に変換
+    return {
+      success: false,
+      errorReason: verification.invalidReason as any,
+      payer: verification.payer,
+      transaction: "",
+      network,
+    };
   }
 
   console.log(`[Settle] Processing authorization from ${authorization.from} to ${authorization.to}, value: ${authorization.value}`);
@@ -313,16 +321,19 @@ export async function settleAuthorization(req: SettleRequest): Promise<SettleRes
     console.log(`[Settle] Transaction confirmed: ${hash}, status: ${receipt.status}`);
 
     return {
-      isValid: true,
-      txHash: hash,
+      success: true,
       payer,
+      transaction: hash,
+      network,
     };
   } catch (error: any) {
     console.error("[Settle] Error:", error);
     return {
-      isValid: false,
-      invalidReason: "invalid_payload",
+      success: false,
+      errorReason: "invalid_payload",
       payer,
+      transaction: "",
+      network,
     };
   }
 }

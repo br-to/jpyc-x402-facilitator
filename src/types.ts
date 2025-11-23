@@ -57,6 +57,23 @@ export type InvalidReason =
   | "invalid_exact_evm_payload_signature"
   | "invalid_exact_evm_payload_signature_address";
 
+export type SettleErrorReason =
+  | "insufficient_funds"
+  | "invalid_scheme"
+  | "invalid_network"
+  | "invalid_x402_version"
+  | "invalid_payment_requirements"
+  | "invalid_payload"
+  | "invalid_exact_evm_payload_authorization_value"
+  | "invalid_exact_evm_payload_authorization_valid_after"
+  | "invalid_exact_evm_payload_authorization_valid_before"
+  | "invalid_exact_evm_payload_authorization_typed_data_message"
+  | "invalid_exact_evm_payload_authorization_from_address_kyt"
+  | "invalid_exact_evm_payload_authorization_to_address_kyt"
+  | "invalid_exact_evm_payload_signature_address"
+  | "settle_exact_svm_block_height_exceeded"
+  | "settle_exact_svm_transaction_confirmation_timed_out";
+
 export interface VerifyResponse {
   isValid: boolean;
   invalidReason?: InvalidReason;
@@ -70,8 +87,9 @@ export interface SettleRequest {
 }
 
 export interface SettleResponse {
-  isValid: boolean;
-  txHash?: string;
-  invalidReason?: InvalidReason;
+  success: boolean;
+  errorReason?: SettleErrorReason;
   payer: string;
+  transaction: string;
+  network: string;
 }
