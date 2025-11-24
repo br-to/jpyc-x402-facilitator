@@ -1,24 +1,12 @@
 import { parseSignature } from "viem";
 import { SettleRequest, SettleResponse } from "./types";
 import { jpycContract } from "./common";
-import { verifyAuthorization } from "./verifyService";
 
 export async function settleAuthorization(req: SettleRequest): Promise<SettleResponse> {
   const { paymentPayload } = req;
   const { authorization } = paymentPayload.payload;
   const payer = authorization.from;
   const network = paymentPayload.network;
-
-  const verification = await verifyAuthorization(req);
-  if (!verification.isValid) {
-    return {
-      success: false,
-      errorReason: verification.invalidReason as any,
-      payer: verification.payer,
-      transaction: "",
-      network,
-    };
-  }
 
   console.log(`[Settle] Processing authorization from ${authorization.from} to ${authorization.to}, value: ${authorization.value}`);
 
