@@ -225,7 +225,7 @@ x402プロトコルに準拠したpaymentの検証を行います。
     "mimeType": "application/json",
     "payTo": "0x742d35Cc6634C0532925a3b844Bc454e4438f44e",
     "maxTimeoutSeconds": 10,
-    "asset": "0x6AE7Dfc73E0dDE2aa99ac063DcF7e8A63265108c"
+    "asset": "0xE7C3D8C9a439feDe00D2600032D5dB0Be71C3c29"
   }
 }
 ```
@@ -314,7 +314,7 @@ x402プロトコルに準拠したpaymentの検証を行います。
     "mimeType": "application/json",
     "payTo": "0x742d35Cc6634C0532925a3b844Bc454e4438f44e",
     "maxTimeoutSeconds": 10,
-    "asset": "0x6AE7Dfc73E0dDE2aa99ac063DcF7e8A63265108c"
+    "asset": "0xE7C3D8C9a439feDe00D2600032D5dB0Be71C3c29"
   }
 }
 ```
@@ -412,7 +412,7 @@ EIP-712は、構造化されたデータに署名するための標準です。�
     name: "JPY Coin",
     version: "1",
     chainId: 137,
-    verifyingContract: "0x6AE7Dfc73E0dDE2aa99ac063DcF7e8A63265108c"
+    verifyingContract: "0xE7C3D8C9a439feDe00D2600032D5dB0Be71C3c29"
   },
   types: {
     TransferWithAuthorization: [
