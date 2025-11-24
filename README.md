@@ -34,7 +34,7 @@ JPYCのEIP-3009を処理する[x402プロトコル](https://docs.cdp.coinbase.co
 │   Client    │ ─── EIP-712署名の作成
 └──────┬──────┘
        │
-       │ POST /verify または /settle
+       │ POST /verify / /settle
        │
 ┌──────▼──────────────────────────────────┐
 │    Facilitator Server (Express)         │
@@ -80,6 +80,43 @@ JPYCのEIP-3009を処理する[x402プロトコル](https://docs.cdp.coinbase.co
    - `transferWithAuthorization`関数を呼び出し
    - トランザクションハッシュを返却
 
+
+## RPCプロバイダーの選定
+
+このプロジェクトでは、Polygon MainnetへのアクセスにRPCプロバイダーを使用します。このプロジェクトでは**Alchemy**を使用していますが、Infuraやその他のRPCプロバイダーでも動作します。
+
+### このプロジェクトでAlchemyを選んだ理由
+
+開発時に以下の点で使いやすかったため、Alchemyを選択しました：
+
+- **セットアップが簡単**: アカウント作成からAPI Key取得までスムーズ
+- **無料プランが充実**: 開発・小規模運用には十分な無料枠（月間300M Compute Units）
+- **ダッシュボードが使いやすい**: リクエストの監視やエラーの確認がしやすい
+- **ドキュメントが充実**: 必要な情報にすぐアクセスできる
+
+### RPCプロバイダーの選択
+
+Alchemy以外にも、以下のRPCプロバイダーが利用可能です：
+
+- **Infura**: 無料プランあり（100K req/日）、広く使われている
+- **QuickNode**: 高パフォーマンス、有料プラン中心
+- **Ankr**: 無料プランあり、複数チェーン対応
+
+どのプロバイダーを選んでも、`.env`ファイルの`RPC_URL`を設定するだけで動作します。
+
+### Alchemyのセットアップ例
+
+1. [Alchemy](https://www.alchemy.com/)でアカウントを作成
+2. Dashboardから "Create App" を選択
+   - Chain: Polygon
+   - Network: Polygon Mainnet
+3. アプリの詳細画面から "VIEW KEY" をクリックしてAPI Keyを取得
+4. `.env`ファイルに設定：
+
+```env
+RPC_URL=https://polygon-mainnet.g.alchemy.com/v2/YOUR_API_KEY
+```
+
 ## セットアップ
 
 ### 前提条件
@@ -105,8 +142,11 @@ pnpm install
 `.env`ファイルをプロジェクトルートに作成し、以下の変数を設定してください：
 
 ```env
-# Polygon MainnetのRPC URL（InfuraやAlchemyなど）
-RPC_URL=https://polygon-mainnet.infura.io/v3/YOUR_PROJECT_ID
+# Polygon MainnetのRPC URL
+RPC_URL=https://polygon-mainnet.g.alchemy.com/v2/YOUR_API_KEY
+
+# Infuraを使用する場合
+# RPC_URL=https://polygon-mainnet.infura.io/v3/YOUR_PROJECT_ID
 
 # リレイヤーの秘密鍵（ガス代を支払うアカウント）
 RELAYER_PK=0xYOUR_PRIVATE_KEY
@@ -428,8 +468,21 @@ curl -X POST http://localhost:4021/verify \
 
 ## 参考リンク
 
+### プロトコル・標準
 - [x402 Protocol Documentation](https://docs.cdp.coinbase.com/api-reference/v2/rest-api/x402-facilitator)
 - [EIP-3009: Transfer With Authorization](https://eips.ethereum.org/EIPS/eip-3009)
 - [EIP-712: Typed Structured Data Hashing and Signing](https://eips.ethereum.org/EIPS/eip-712)
+
+### JPYC
 - [JPYC Official Website](https://jpyc.jp/)
+- [JPYC ドキュメント](https://docs.jpyc.jp/)
+
+### 開発ツール
 - [Viem Documentation](https://viem.sh/)
+- [Express.js Documentation](https://expressjs.com/)
+
+### RPCプロバイダー
+- [Alchemy](https://www.alchemy.com/) - 推奨RPCプロバイダー
+- [Alchemy Documentation](https://docs.alchemy.com/)
+- [Infura](https://www.infura.io/)
+- [QuickNode](https://www.quicknode.com/)
